@@ -1,11 +1,49 @@
 <template>
   <div class="wrap">
     <div class="acupointLeft">
-      <div class="acupoint-txt" v-show="textarea">{{textarea}}</div>
-      <audio controls  class="audio" v-if="videoShow">
-        <source :src="mp3" ref="audioname" type="audio/ogg" />
-        <source :src="mp3" ref="audioname" type="audio/mpeg" />
-      </audio>
+      <!-- <div class="acupoint-txt" v-show="textarea"></div> -->
+      <el-input
+        class="acupoint-txt"
+        v-show="textarea"
+        type="textarea"
+        :autosize="{ minRows: 2, maxRows: 20}"
+        v-model="textarea"
+      ></el-input>
+      <div v-if="videoShow">
+        <el-button plain class="btn" @click="bindAddtableRow" size="mini">添加多音字</el-button>
+        <el-button plain class="btn" @click="bindremovetableRow" size="mini">移除多音字</el-button>
+        <el-table :data="tableData" border class="table-wrap">
+          <el-table-column prop="oldVal" label="旧值">
+            <template scope="scope">
+              <div class="input-box">
+                <el-input
+                  size="small"
+                  @blur="handleInputBlur(scope.$index,scope.row)"
+                  v-model="scope.row.oldVal"
+                ></el-input>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="newVal" label="新值">
+            <template scope="scope">
+              <div class="input-box">
+                <el-input
+                  size="small"
+                  @blur="handleInputBlur(scope.$index,scope.row)"
+                  v-model="scope.row.newVal"
+                ></el-input>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="audioBox" v-if="videoShow">
+        <el-button type="primary" @click="bindChangeAudio">音频生成</el-button>
+        <audio controls class="audio">
+          <source :src="mp3" ref="audioname" type="audio/ogg" />
+          <source :src="mp3" ref="audioname" type="audio/mpeg" />
+        </audio>
+      </div>
     </div>
     <div class="acupointRight">
       <video controls ref="videoname" class="video" v-if="videoShow">
@@ -59,6 +97,12 @@ export default {
   name: "home",
   data() {
     return {
+      tableData: [
+        {
+          oldVal: "",
+          newVal: ""
+        }
+      ],
       isShowed: false,
       textarea: "",
       acupointData: [],
@@ -86,17 +130,18 @@ export default {
       seconds: Number,
       video: "",
       textData: [],
-      videoShow:false
+      videoShow: false,
+      changeData: []
     };
   },
   beforeMount() {
     this.getacupointDataList();
   },
-  watch:{
-    video(){
-     this.$nextTick(()=>{
-       this.videoShow = true;
-     }) 
+  watch: {
+    video() {
+      this.$nextTick(() => {
+        this.videoShow = true;
+      });
     }
   },
   methods: {
@@ -113,27 +158,23 @@ export default {
     },
     getaInfoDataList(acupoint, double) {
       let that = this;
-      this
-        .$ajax({
-          url: "http://172.16.93.105:2345/acuGet",
-          method: "get",
-          params: {
-            acu: acupoint,
-            speed: double
-          }
-        })
-        .then(res => {
-          console.log(res.data);
-          if (res.data.code == 0) {
-            console.log(res.data)
-            this.videoShow = false;
-            this.mp3 = res.data.mp3;
-            this.seconds = res.data.seconds;
-            this.textarea = res.data.text;
-            this.video = res.data.video;
-            this.textData.push({ txt: this.acupoint, seconds: this.seconds });
-          }
-        });
+      this.$ajax({
+        url: "http://172.16.93.105:2345/acuGet",
+        method: "get",
+        params: {
+          acu: acupoint,
+          speed: double
+        }
+      }).then(res => {
+        if (res.data.code == 0) {
+          this.videoShow = false;
+          this.mp3 = res.data.mp3;
+          this.seconds = res.data.seconds;
+          this.textarea = res.data.text;
+          this.video = res.data.video;
+          this.textData.push({ txt: this.acupoint, seconds: this.seconds });
+        }
+      });
     },
     bindGetacupointVal(acupoint) {
       this.acupoint = acupoint;
@@ -147,6 +188,58 @@ export default {
       } else {
         this.$message.error("没选择你提交啥子");
       }
+    },
+    bindAddtableRow() {
+      this.tableData.push({
+        oldVal: "",
+        newVal: ""
+      });
+    },
+    bindremovetableRow() {
+      this.tableData.shift({
+        oldVal: "",
+        newVal: ""
+      });
+    },
+    handleInputBlur(index, data) {
+      this.changeData[index] = { oldval: data.oldVal, newval: data.newVal };
+      console.log(this.changeData);
+    },
+    bindChangeAudio() {
+      this.$confirm("是否提交音频", "提交确认", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "info"
+      })
+        .then(() => {
+          this.$ajax
+            .post("http://172.16.93.105:2345/audioCreate", {
+              acu: this.acupoint,
+              text: this.textarea,
+              change: this.changeData
+            })
+            .then(res => {
+              console.log(res);
+              if (res.data.code === 0) {
+                this.$message({
+                  type: "success",
+                  message: res.data.msg
+                });
+              }
+            })
+            .catch(err => {
+              this.$message({
+                type: "error",
+                message: err
+              });
+            });
+        })
+        .catch(err => {
+          this.$message({
+            type: "error",
+            message: "操作已取消"
+          });
+        });
     }
   }
 };
@@ -155,7 +248,6 @@ export default {
 <style scoped>
 .wrap {
   width: 1200px;
-  height: 100vh;
   margin: 0 auto;
   display: -webkit-flex;
   flex-flow: row nowrap;
@@ -167,12 +259,8 @@ export default {
   flex-direction: column;
 }
 .acupoint-txt {
-  width: 500px;
-  min-height: 314px;
+  margin-top: 7px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  border: 1px solid #ebeef5;
-  padding: 8px;
   font-size: 20px;
 }
 .acupointRight {
@@ -200,5 +288,20 @@ export default {
 }
 .video {
   max-height: 180px;
+}
+.audioBox {
+  margin-top: 20px;
+}
+.audio {
+  margin-left: 20px;
+}
+.audioBox {
+  display: -webkit-flex;
+  flex-flow: ropw nowrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.btn{
+  margin-bottom: 20px;
 }
 </style>
