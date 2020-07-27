@@ -1,6 +1,6 @@
 # acupoint-play
 
-> A Vue.js project
+> 穴位视频查询的项目
 
 ## Build Setup
 
